@@ -69,9 +69,14 @@ class JwtHelper {
 
         KeyFactory kf = KeyFactory.getInstance("RSA");
 
-        PKCS8EncodedKeySpec keySpecPKCS8 = new PKCS8EncodedKeySpec(Base64.getDecoder().decode(privateKeyContent));
+        try {
+            byte[] decode = Base64.getDecoder().decode(privateKeyContent);
+            PKCS8EncodedKeySpec keySpecPKCS8 = new PKCS8EncodedKeySpec(decode);
 
-        return kf.generatePrivate(keySpecPKCS8);
+            return kf.generatePrivate(keySpecPKCS8);
+        } catch (IllegalArgumentException e) {
+            throw new InvalidPrivateKeyException("Failed to decode private key: " + e.getMessage());
+        }
     }
 
 }

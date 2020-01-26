@@ -1,10 +1,26 @@
 package org.jenkinsci.plugins.github_branch_source;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.Jwts;
+import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
+import java.security.PublicKey;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.Is.is;
 import static org.jenkinsci.plugins.github_branch_source.JwtHelper.createJWT;
+import static org.mockito.ArgumentMatchers.contains;
 
 public class JwtHelperTest {
+
+    @Rule
+    public ExpectedException expectedException = ExpectedException.none();
 
     // https://stackoverflow.com/a/22176759/4951015
     private static final String PKCS8_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----\n" +
@@ -36,6 +52,17 @@ public class JwtHelperTest {
             "Nw9bewRvqjySBlDJ9/aNSeEY\n" +
             "-----END PRIVATE KEY-----";
 
+    private static final String PKCS8_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n" +
+            "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA+7x7FcMg1fHI++ckeFlp\n" +
+            "eq5YH/3uc5ngYLZtDwoJ4rXEmw+RVN999NQz2OWuwLalQTsBJxNeC/V0u6L+tVPs\n" +
+            "dZuGkJqkf3T0GgNmsodnGD7M1jUDKeNgKwyH4Ow4Uq77ESSh7Gz15T46nnNLnS6o\n" +
+            "Ui1SDvX6zS3/nQLC7IGJPDt/Tyhm992pBhu7Vk3tCfmpDUI4G0u7zovLEjS8ByHW\n" +
+            "H8/wJvul5pvieMlbOvl7d5Dni3RQZM/B/xxrCavOeDGyACvx7iHdTDj0tHA1od+7\n" +
+            "c0bDPqvx2c2EZHOW4TSsPzI/YzfYw+Rh9C33mtEBXnY6aX9Sr1nXF5/v1jOzpsn4\n" +
+            "bwIDAQAB\n" +
+            "-----END PUBLIC KEY-----";
+
+
     private static final String PKCS1_PRIVATE_KEY = "-----BEGIN RSA PRIVATE KEY-----\n" +
             "MIIEpAIBAAKCAQEA26y2ZLYaNKHYg1FehH/WmXZ+SXG9ofLCf7+tR0j/BHbQy1Ck\n" +
             "u6Pqxn10nKPrAZSFakNDKI1vf92+Ny8LFitBucs2JaDSm1kUHjZaoCbp2FQmbr28\n" +
@@ -66,11 +93,36 @@ public class JwtHelperTest {
 
     @Test
     public void createJWT_is_valid() throws Exception {
-       createJWT("123", PKCS8_PRIVATE_KEY);
+        String jwt = createJWT("123", PKCS8_PRIVATE_KEY);
+        Jws<Claims> parsedJwt = Jwts.parser()
+                .setSigningKey(getPublicKeyFromString(PKCS8_PUBLIC_KEY))
+                .parseClaimsJws(jwt);
+        assertThat(parsedJwt.getBody().getIssuer(), is("123"));
     }
 
-    @Test(expected = InvalidPrivateKeyException.class)
-    public void createJWT_with_pkcs1_is_invalid() throws Exception {
+    @Test
+    public void createJWT_with_pkcs1_is_invalid() {
+        expectedException.expect(InvalidPrivateKeyException.class);
+        expectedException.expectMessage(contains("openssl pkcs8 -topk8"));
         createJWT("123", PKCS1_PRIVATE_KEY);
+    }
+
+    @Test
+    public void createJWT_with_not_base64_is_invalid() {
+        expectedException.expect(InvalidPrivateKeyException.class);
+        expectedException.expectMessage(contains("Failed to decode private key"));
+        createJWT("123", "d£!@!@£!@£");
+    }
+
+    private static PublicKey getPublicKeyFromString(final String key) throws GeneralSecurityException {
+        String publicKeyContent = key.replaceAll("\\n", "")
+                .replace("-----BEGIN PUBLIC KEY-----", "")
+                .replace("-----END PUBLIC KEY-----", "");
+
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+
+        X509EncodedKeySpec keySpecPKCS8 = new X509EncodedKeySpec(Base64.getDecoder().decode(publicKeyContent));
+
+        return kf.generatePublic(keySpecPKCS8);
     }
 }
