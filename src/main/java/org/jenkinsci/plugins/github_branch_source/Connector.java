@@ -113,7 +113,7 @@ public class Connector {
     };
     private static final Random ENTROPY = new Random();
     private static final String SALT = Long.toHexString(ENTROPY.nextLong());
-    private static final String ERROR_AUTHENTICATING_GITHUB_APP = "Couldn't find installation for %s for owner %s";
+    private static final String ERROR_AUTHENTICATING_GITHUB_APP = "Couldn't find GitHub app installation %s";
 
     private Connector() {
         throw new IllegalAccessError("Utility class");
@@ -426,7 +426,7 @@ public class Connector {
             if (username != null && !githubApp) {
                 gb.withPassword(username, password);
             } else if (username != null) {
-                gb.withOAuthToken(generateAppInstallationToken(username, password, "timja-testing"), "");
+                gb.withOAuthToken(generateAppInstallationToken(username, password), "");
             }
 
             hub = gb.build();
@@ -438,7 +438,7 @@ public class Connector {
     }
 
     @SuppressWarnings("deprecation") // preview features are required for GitHub app integration, GitHub api adds deprecated to all preview methods
-    private static String generateAppInstallationToken(String appId, String appPrivateKey, String owner) {
+    private static String generateAppInstallationToken(String appId, String appPrivateKey) {
         try {
             String jwtToken = createJWT(appId, appPrivateKey);
             GitHub gitHubApp = new GitHubBuilder().withJwtToken(jwtToken).build();
@@ -455,9 +455,9 @@ public class Connector {
                 return appInstallationToken.getToken();
             }
         } catch (IOException e) {
-            throw new IllegalArgumentException(String.format(ERROR_AUTHENTICATING_GITHUB_APP, appId, owner), e);
+            throw new IllegalArgumentException(String.format(ERROR_AUTHENTICATING_GITHUB_APP, appId), e);
         }
-        throw new IllegalArgumentException(String.format(ERROR_AUTHENTICATING_GITHUB_APP, appId, owner));
+        throw new IllegalArgumentException(String.format(ERROR_AUTHENTICATING_GITHUB_APP, appId));
     }
 
     public static void release(@CheckForNull GitHub hub) {
