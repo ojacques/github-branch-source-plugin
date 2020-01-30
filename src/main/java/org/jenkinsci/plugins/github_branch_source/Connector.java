@@ -91,6 +91,7 @@ import org.kohsuke.github.extras.OkHttpConnector;
 
 import static com.cloudbees.plugins.credentials.CredentialsMatchers.anyOf;
 import static com.cloudbees.plugins.credentials.CredentialsMatchers.instanceOf;
+import static java.util.logging.Level.FINE;
 import static org.jenkinsci.plugins.github_branch_source.JwtHelper.createJWT;
 
 /**
@@ -325,9 +326,12 @@ public class Connector {
         } else if (credentials instanceof StandardUsernamePasswordCredentials) {
             StandardUsernamePasswordCredentials c = (StandardUsernamePasswordCredentials) credentials;
             hash = Util.getDigestOf(c.getPassword().getPlainText() + SALT);
-        } else {
+        } else if (credentials instanceof SSHUserPrivateKey) {
             SSHUserPrivateKey c = (SSHUserPrivateKey) credentials;
             hash = Util.getDigestOf(c.getPrivateKeys().get(0) + SALT);
+        } else {
+            // TODO OAuth support
+            throw new IOException("Unsupported credential type: " + credentials.getClass().getName());
         }
         String key = gitHub.getApiUrl() + "::" + hash;
         synchronized (apiUrlValid) {
@@ -369,6 +373,7 @@ public class Connector {
 
             githubApp = true;
         } else {
+            // TODO OAuth support
             throw new IOException("Unsupported credential type: " + credentials.getClass().getName());
         }
         synchronized (githubs) {
@@ -564,7 +569,19 @@ public class Connector {
      * @return {@code true} if the credentials are valid.
      */
     static boolean isCredentialValid(GitHub gitHub) {
-        return true;
+        if (gitHub.isAnonymous()) {
+            return true;
+        } else {
+            try {
+                gitHub.getRateLimit();
+                return true;
+            } catch (IOException e) {
+                if (LOGGER.isLoggable(FINE)) {
+                    LOGGER.log(FINE, "Exception validating credentials on " + gitHub.getApiUrl(), e);
+                }
+                return false;
+            }
+        }
     }
 
     /*package*/ static void checkConnectionValidity(String apiUri, @NonNull TaskListener listener,
